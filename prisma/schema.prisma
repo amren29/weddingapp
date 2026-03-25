@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  weddings  Wedding[]
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+model Wedding {
+  id             String        @id @default(uuid())
+  slug           String        @unique
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+
+  groomName      String
+  brideName      String
+  groomFamily    String?
+  brideFamily    String?
+
+  eventDate      DateTime
+  venue          String
+  venueAddress   String?
+  venueMapUrl    String?
+
+  themeId        String?
+  themeConfig    Json?
+
+  cardImageUrl   String?
+  customMessage  String?
+
+  paymentMethod  String?
+  paymentDetails Json?
+
+  status         WeddingStatus @default(DRAFT)
+  expiresAt      DateTime?
+  exportedAt     DateTime?
+  exportUrl      String?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  guests         Guest[]
+  messages       Message[]
+  voiceNotes     VoiceNote[]
+  galleryImages  GalleryImage[]
+  gifts          Gift[]
+}
+
+enum WeddingStatus {
+  DRAFT
+  PUBLISHED
+  EXPIRED
+  ARCHIVED
+}
+
+model Guest {
+  id           String     @id @default(uuid())
+  weddingId    String
+  wedding      Wedding    @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  name         String
+  email        String?
+  phone        String?
+  rsvpStatus   RsvpStatus @default(PENDING)
+  plusOnes     Int        @default(0)
+  dietaryNotes String?
+  respondedAt  DateTime?
+
+  createdAt    DateTime   @default(now())
+
+  @@unique([weddingId, email])
+}
+
+enum RsvpStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  MAYBE
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  weddingId  String
+  wedding    Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  guestName  String
+  content    String
+  isApproved Boolean  @default(true)
+
+  createdAt  DateTime @default(now())
+}
+
+model VoiceNote {
+  id         String   @id @default(uuid())
+  weddingId  String
+  wedding    Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  guestName  String
+  fileUrl    String
+  duration   Int
+  isApproved Boolean  @default(true)
+
+  createdAt  DateTime @default(now())
+}
+
+model GalleryImage {
+  id           String   @id @default(uuid())
+  weddingId    String
+  wedding      Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  uploadedBy   String
+  fileUrl      String
+  thumbnailUrl String?
+  caption      String?
+  isApproved   Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+}
+
+model Gift {
+  id          String     @id @default(uuid())
+  weddingId   String
+  wedding     Wedding    @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  imageUrl    String?
+  link        String?
+  price       Float?
+  claimedBy   String?
+  claimedAt   DateTime?
+  status      GiftStatus @default(AVAILABLE)
+
+  createdAt   DateTime   @default(now())
+}
+
+enum GiftStatus {
+  AVAILABLE
+  CLAIMED
+  PURCHASED
+}
