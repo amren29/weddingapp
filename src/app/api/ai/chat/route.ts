@@ -1,5 +1,6 @@
-import { streamText } from "ai";
+import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
+import { NextRequest, NextResponse } from "next/server";
 
 const SYSTEM_PROMPT = `You are a friendly and creative wedding invitation designer AI assistant called "Nikah". You help couples create their perfect digital wedding invitation card.
 
@@ -34,7 +35,7 @@ Format:
 </card_data>
 
 Conversation flow:
-1. First message: Greet warmly, understand their style/vision. Generate a beautiful theme based on what they describe. Ask what the couple names are.
+1. First message: Greet warmly, understand their style/vision. Generate a beautiful theme based on what they describe. Ask what the couple's names are.
 2. Get couple names (groom & bride). Update card_data.
 3. Ask about the date and time.
 4. Ask about the venue.
@@ -49,16 +50,22 @@ Guidelines:
 - layout must be one of: "classic", "modern", "minimal", "ornate"
 - For dates, convert to ISO format (YYYY-MM-DDTHH:mm:ss)
 - If user gives partial info, work with what you have
-- Always reflect changes in the card_data JSON`;
+- Always reflect changes in the card_data JSON
+- The status field must be a single string, not a union type`;
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const { messages } = await request.json();
 
-  const result = streamText({
-    model: google("gemini-2.0-flash"),
-    system: SYSTEM_PROMPT,
-    messages,
-  });
+  try {
+    const { text } = await generateText({
+      model: google("gemini-2.0-flash"),
+      system: SYSTEM_PROMPT,
+      messages,
+    });
 
-  return result.toTextStreamResponse();
+    return NextResponse.json({ reply: text });
+  } catch (error) {
+    console.error("AI chat error:", error);
+    return NextResponse.json({ error: "AI generation failed" }, { status: 500 });
+  }
 }
