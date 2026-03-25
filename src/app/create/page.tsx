@@ -300,24 +300,6 @@ function CreateFlow() {
             <p className="text-sm text-gray-500">Fill in the information for your invitation card</p>
           </div>
 
-          {/* Theme preview strip */}
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-200 mb-6">
-            <div
-              className="w-10 h-10 rounded-lg shrink-0"
-              style={{ background: `linear-gradient(135deg, ${selectedTheme.colors.primary}, ${selectedTheme.colors.secondary})` }}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{selectedTheme.name}</p>
-              <p className="text-xs text-gray-400">Theme</p>
-            </div>
-            <button
-              onClick={() => setStep("prompt")}
-              className="text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
-            >
-              Change
-            </button>
-          </div>
-
           <div className="space-y-4 bg-white rounded-2xl border border-gray-200 p-5">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -357,20 +339,14 @@ function CreateFlow() {
             </div>
           </div>
 
-          <div className="flex gap-3 mt-6">
-            <Button variant="outline" onClick={() => setStep("prompt")} className="rounded-full">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <Button
-              onClick={() => setStep("preview")}
-              disabled={!form.groomName || !form.brideName || !form.eventDate || !form.venue}
-              className="flex-1 bg-gray-900 hover:bg-gray-800 rounded-full"
-            >
-              Preview Card
-              <Eye className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
+          <Button
+            onClick={() => setStep("preview")}
+            disabled={!form.groomName || !form.brideName || !form.eventDate || !form.venue}
+            className="w-full mt-6 bg-gray-900 hover:bg-gray-800 rounded-full h-11"
+          >
+            Preview Card
+            <Eye className="h-4 w-4 ml-1" />
+          </Button>
         </div>
       )}
 
@@ -407,14 +383,9 @@ function CreateFlow() {
               )}
             </Button>
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep("details")} className="flex-1 rounded-full">
-                Edit Details
-              </Button>
-              <Button variant="outline" onClick={() => setStep("prompt")} className="flex-1 rounded-full">
-                Change Theme
-              </Button>
-            </div>
+            <Button variant="outline" onClick={() => setStep("details")} className="w-full rounded-full">
+              Edit Details
+            </Button>
 
             <p className="text-[11px] text-gray-400 text-center pt-2">
               You&apos;ll need to create an account to publish. Your card design will be saved.
