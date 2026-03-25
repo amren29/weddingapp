@@ -24,6 +24,7 @@ import {
   BASIC_PRICE,
   PREMIUM_PRICE,
 } from "@/config/plans";
+import { HeroPrompt } from "@/components/wedding/hero-prompt";
 
 export default function HomePage() {
   return (
@@ -82,26 +83,14 @@ export default function HomePage() {
               share photos, and receive gifts — all in one link.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/register">
-                <Button size="lg" className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-8 h-12 text-base w-full sm:w-auto">
-                  Start for free
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <a href="#features">
-                <Button size="lg" variant="outline" className="rounded-full px-8 h-12 text-base border-gray-200 text-gray-700 w-full sm:w-auto">
-                  See how it works
-                </Button>
-              </a>
-            </div>
+            <HeroPrompt />
 
-            <div className="flex items-center justify-center gap-6 mt-10 text-sm text-gray-400">
+            <div className="flex items-center justify-center gap-6 mt-8 text-sm text-gray-400">
               <span className="flex items-center gap-1.5">
-                <Check className="h-4 w-4 text-green-500" /> Free to start
+                <Check className="h-4 w-4 text-green-500" /> No account needed
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="h-4 w-4 text-green-500" /> No credit card
+                <Check className="h-4 w-4 text-green-500" /> AI-powered
               </span>
               <span className="flex items-center gap-1.5">
                 <Check className="h-4 w-4 text-green-500" /> 2 min setup
