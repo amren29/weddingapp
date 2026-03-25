@@ -1,26 +1,17 @@
-const OPENAI_API_URL = "https://api.openai.com/v1";
+import { generateText } from "ai";
+import { google } from "@ai-sdk/google";
 
-export async function callOpenAI(
-  messages: { role: string; content: string }[],
-  options?: { model?: string; response_format?: { type: string } }
+export async function callAI(
+  messages: { role: "system" | "user"; content: string }[]
 ) {
-  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: options?.model || "gpt-4o-mini",
-      messages,
-      response_format: options?.response_format,
-      temperature: 0.7,
-    }),
+  const system = messages.find((m) => m.role === "system")?.content || "";
+  const userMsg = messages.find((m) => m.role === "user")?.content || "";
+
+  const { text } = await generateText({
+    model: google("gemini-2.0-flash"),
+    system,
+    prompt: userMsg,
   });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  return response.json();
+  return text;
 }
