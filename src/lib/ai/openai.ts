@@ -11,7 +11,7 @@ export async function callOpenAI(
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: options?.model || "gpt-4o",
+      model: options?.model || "gpt-4o-mini",
       messages,
       response_format: options?.response_format,
       temperature: 0.7,
