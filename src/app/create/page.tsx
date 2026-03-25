@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useChat } from "ai/react";
+import { useChat } from "@ai-sdk/react";
 import { createClient } from "@/lib/supabase/client";
 import { InvitationCard } from "@/components/wedding/invitation-card";
 import { builtInThemes } from "@/config/themes";
