@@ -1,58 +1,58 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { InvitationCard } from "@/components/wedding/invitation-card";
 import { builtInThemes } from "@/config/themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   Sparkles,
-  ArrowLeft,
-  ArrowRight,
-  Eye,
+  Send,
   Loader2,
   Heart,
   Check,
+  Bot,
+  User,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type { ThemeConfig, Wedding } from "@/types";
 
 export default function CreatePage() {
   return (
-    <Suspense fallback={<LoadingState />}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>}>
       <CreateFlow />
     </Suspense>
   );
 }
 
-function LoadingState() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-    </div>
-  );
+interface ChatMessage {
+  id: string;
+  role: "user" | "ai";
+  content: string;
+  typing?: boolean;
 }
-
-type Step = "prompt" | "details" | "preview";
 
 function CreateFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialPrompt = searchParams.get("prompt") || "";
   const supabase = createClient();
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<Step>(initialPrompt ? "prompt" : "prompt");
-  const [prompt, setPrompt] = useState(initialPrompt);
-  const [generating, setGenerating] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState<ThemeConfig>(builtInThemes[0]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [cardReady, setCardReady] = useState(false);
 
-  const [form, setForm] = useState({
+  const [theme, setTheme] = useState<ThemeConfig>(builtInThemes[0]);
+  const [wedding, setWedding] = useState({
     groomName: "",
     brideName: "",
     groomFamily: "",
@@ -63,20 +63,42 @@ function CreateFlow() {
     customMessage: "",
   });
 
-  const updateForm = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  // Scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  // Auto-generate theme from prompt on mount
+  // Auto-start with initial prompt
   useEffect(() => {
     if (initialPrompt) {
-      handleGenerateTheme(initialPrompt);
+      addMessage("user", initialPrompt);
+      processPrompt(initialPrompt);
+    } else {
+      addMessage("ai", "Hi! I'm your wedding invitation designer. Describe the style you want — colors, mood, theme — and I'll create it for you.");
     }
   }, []);
 
-  const handleGenerateTheme = async (text: string) => {
-    if (!text.trim()) return;
-    setGenerating(true);
+  const addMessage = (role: "user" | "ai", content: string) => {
+    setMessages((prev) => [...prev, { id: Date.now().toString(), role, content }]);
+  };
+
+  const addTypingMessage = (content: string, delay: number = 0): Promise<void> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        setMessages((prev) => [...prev, { id: Date.now().toString(), role: "ai", content }]);
+        resolve();
+      }, delay);
+    });
+  };
+
+  const processPrompt = async (text: string) => {
+    setIsThinking(true);
+
+    // Step 1: Acknowledge
+    await addTypingMessage("Understanding your vision...", 500);
+
+    // Step 2: Generate theme
+    await addTypingMessage("🎨 Generating color palette and typography...", 1000);
 
     try {
       const res = await fetch("/api/ai/generate-theme", {
@@ -85,39 +107,114 @@ function CreateFlow() {
         body: JSON.stringify({ prompt: text }),
       });
 
-      if (!res.ok) throw new Error();
-
-      const theme = await res.json();
-      setSelectedTheme(theme);
-      toast.success("Theme generated!");
-      setStep("details");
+      if (res.ok) {
+        const generatedTheme = await res.json();
+        setTheme(generatedTheme);
+        await addTypingMessage(`✅ Theme created: **${generatedTheme.name}**\n\nColors: ${generatedTheme.colors.primary}, ${generatedTheme.colors.secondary}, ${generatedTheme.colors.accent}\nFonts: ${generatedTheme.fonts.heading} + ${generatedTheme.fonts.body}`, 800);
+      } else {
+        const fallback = builtInThemes[Math.floor(Math.random() * builtInThemes.length)];
+        setTheme(fallback);
+        await addTypingMessage(`✅ I've selected **${fallback.name}** theme for you.`, 800);
+      }
     } catch {
-      // Fallback to a random built-in theme
-      const random = builtInThemes[Math.floor(Math.random() * builtInThemes.length)];
-      setSelectedTheme(random);
-      toast.error("AI generation failed — using a built-in theme instead. You can change it later.");
-      setStep("details");
-    } finally {
-      setGenerating(false);
+      const fallback = builtInThemes[Math.floor(Math.random() * builtInThemes.length)];
+      setTheme(fallback);
+      await addTypingMessage(`✅ I've selected **${fallback.name}** theme for you.`, 800);
     }
+
+    // Step 3: Ask for details
+    await addTypingMessage("Now I need some details. What are the **couple's names**? (e.g., Ahmad & Sarah)", 600);
+    setIsThinking(false);
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isThinking) return;
+    const text = input.trim();
+    setInput("");
+    addMessage("user", text);
+
+    setIsThinking(true);
+
+    // Smart parsing of user responses
+    if (!wedding.groomName) {
+      // Try to parse names
+      const nameMatch = text.match(/(.+?)(?:\s*[&+]\s*|\s+and\s+)(.+)/i);
+      if (nameMatch) {
+        const groom = nameMatch[1].trim();
+        const bride = nameMatch[2].trim();
+        setWedding((prev) => ({ ...prev, groomName: groom, brideName: bride }));
+        await addTypingMessage(`✅ Got it — **${groom}** & **${bride}**`, 500);
+        await addTypingMessage("When is the wedding? (e.g., 25 December 2026, 7pm)", 600);
+      } else {
+        // Single name, assume groom
+        setWedding((prev) => ({ ...prev, groomName: text }));
+        await addTypingMessage(`✅ Groom: **${text}**. What's the bride's name?`, 500);
+      }
+    } else if (!wedding.brideName) {
+      setWedding((prev) => ({ ...prev, brideName: text }));
+      await addTypingMessage(`✅ **${wedding.groomName}** & **${text}**`, 500);
+      await addTypingMessage("When is the wedding? (e.g., 25 December 2026, 7pm)", 600);
+    } else if (!wedding.eventDate) {
+      // Try to parse date
+      const parsed = new Date(text);
+      if (!isNaN(parsed.getTime())) {
+        setWedding((prev) => ({ ...prev, eventDate: parsed.toISOString() }));
+        await addTypingMessage(`✅ Date set: **${parsed.toLocaleDateString("en-US", { dateStyle: "full" })}**`, 500);
+      } else {
+        // Try common formats
+        setWedding((prev) => ({ ...prev, eventDate: new Date("2026-12-25T19:00:00").toISOString() }));
+        await addTypingMessage(`✅ I'll set the date for now — you can edit it later.`, 500);
+      }
+      await addTypingMessage("Where's the venue? (e.g., The Grand Ballroom, KL)", 600);
+    } else if (!wedding.venue) {
+      setWedding((prev) => ({ ...prev, venue: text }));
+      await addTypingMessage(`✅ Venue: **${text}**`, 500);
+      await addTypingMessage("Any personal message for your guests? (or type 'skip')", 600);
+    } else if (!wedding.customMessage) {
+      if (text.toLowerCase() !== "skip") {
+        setWedding((prev) => ({ ...prev, customMessage: text }));
+        await addTypingMessage(`✅ Message added.`, 300);
+      } else {
+        await addTypingMessage(`No problem, skipped.`, 300);
+      }
+      // Card is ready
+      await addTypingMessage("🎉 Your invitation card is ready! Tap **Preview** to see it.", 500);
+      setCardReady(true);
+      setShowPreview(true);
+    } else {
+      // Card is already built — handle additional requests
+      if (text.toLowerCase().includes("change") || text.toLowerCase().includes("edit")) {
+        await addTypingMessage("You can edit details after publishing from the dashboard. Tap **Publish** when you're ready!", 500);
+      } else {
+        // Treat as family info or address
+        if (!wedding.groomFamily) {
+          setWedding((prev) => ({ ...prev, groomFamily: text }));
+          await addTypingMessage(`✅ Added family info. Your card has been updated.`, 500);
+        } else {
+          await addTypingMessage("Your card is ready! Tap **Publish** to go live.", 500);
+        }
+      }
+    }
+
+    setIsThinking(false);
   };
 
   const mockWedding: Wedding = {
     id: "",
     slug: "",
     userId: "",
-    groomName: form.groomName || "Groom",
-    brideName: form.brideName || "Bride",
-    groomFamily: form.groomFamily || null,
-    brideFamily: form.brideFamily || null,
-    eventDate: form.eventDate ? new Date(form.eventDate) : new Date("2026-12-25T19:00:00"),
-    venue: form.venue || "Your Venue",
-    venueAddress: form.venueAddress || null,
+    groomName: wedding.groomName || "Groom",
+    brideName: wedding.brideName || "Bride",
+    groomFamily: wedding.groomFamily || null,
+    brideFamily: wedding.brideFamily || null,
+    eventDate: wedding.eventDate ? new Date(wedding.eventDate) : new Date("2026-12-25T19:00:00"),
+    venue: wedding.venue || "Your Venue",
+    venueAddress: wedding.venueAddress || null,
     venueMapUrl: null,
-    themeId: selectedTheme.id,
-    themeConfig: selectedTheme,
+    themeId: theme.id,
+    themeConfig: theme,
     cardImageUrl: null,
-    customMessage: form.customMessage || null,
+    customMessage: wedding.customMessage || null,
     paymentMethod: null,
     paymentDetails: null,
     status: "DRAFT",
@@ -129,56 +226,45 @@ function CreateFlow() {
   };
 
   const handlePublish = async () => {
-    if (!form.groomName || !form.brideName || !form.eventDate || !form.venue) {
-      toast.error("Please fill in all required fields");
-      setStep("details");
+    if (!wedding.groomName || !wedding.brideName || !wedding.venue) {
+      toast.error("Missing required details");
       return;
     }
-
     setPublishing(true);
 
-    // Check if user is logged in
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      // Save form data to sessionStorage so we can restore after login
       sessionStorage.setItem("pendingWedding", JSON.stringify({
-        form,
-        theme: selectedTheme,
-        prompt,
+        form: wedding,
+        theme,
       }));
-      toast.info("Please create an account to publish your invitation");
+      toast.info("Create an account to publish");
       router.push("/register?redirect=/create/publish");
       return;
     }
 
-    // User is logged in — create the wedding
-    await createWedding(user.id);
-  };
-
-  const createWedding = async (userId: string) => {
-    const slug = `${form.groomName}-and-${form.brideName}-${Date.now().toString(36)}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-");
+    const slug = `${wedding.groomName}-and-${wedding.brideName}-${Date.now().toString(36)}`
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
     const { data, error } = await supabase
       .from("Wedding")
       .insert({
         slug,
-        userId,
-        groomName: form.groomName,
-        brideName: form.brideName,
-        groomFamily: form.groomFamily || null,
-        brideFamily: form.brideFamily || null,
-        eventDate: new Date(form.eventDate).toISOString(),
-        venue: form.venue,
-        venueAddress: form.venueAddress || null,
-        customMessage: form.customMessage || null,
-        themeId: selectedTheme.id,
-        themeConfig: selectedTheme,
+        userId: user.id,
+        groomName: wedding.groomName,
+        brideName: wedding.brideName,
+        groomFamily: wedding.groomFamily || null,
+        brideFamily: wedding.brideFamily || null,
+        eventDate: wedding.eventDate || new Date("2026-12-25T19:00:00").toISOString(),
+        venue: wedding.venue,
+        venueAddress: wedding.venueAddress || null,
+        customMessage: wedding.customMessage || null,
+        themeId: theme.id,
+        themeConfig: theme,
         status: "PUBLISHED",
       })
-      .select("id, slug")
+      .select("id")
       .single();
 
     if (error) {
@@ -191,208 +277,146 @@ function CreateFlow() {
     router.push(`/dashboard/${data.id}`);
   };
 
+  const renderContent = (content: string) => {
+    // Simple markdown bold
+    return content.split("**").map((part, i) =>
+      i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen flex flex-col bg-white">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-4">
-          <button onClick={() => router.push("/")} className="flex items-center gap-2 text-gray-500 hover:text-gray-900 text-sm">
-            <ArrowLeft className="h-4 w-4" />
-            Back
+      <div className="border-b border-gray-100 shrink-0">
+        <div className="max-w-3xl mx-auto flex h-14 items-center justify-between px-4">
+          <button onClick={() => router.push("/")} className="flex items-center gap-2">
+            <Heart className="h-4 w-4 text-gray-900" />
+            <span className="font-semibold text-sm">Nikah Invite</span>
           </button>
           <div className="flex items-center gap-2">
-            <Heart className="h-4 w-4 text-gray-900" />
-            <span className="font-semibold text-sm">Create Invitation</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Step indicators */}
-            {(["prompt", "details", "preview"] as Step[]).map((s, i) => (
-              <div
-                key={s}
-                className={cn(
-                  "w-2 h-2 rounded-full transition-colors",
-                  step === s ? "bg-gray-900" : "bg-gray-300"
-                )}
-              />
-            ))}
+            {cardReady && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full text-xs"
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                {showPreview ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+                {showPreview ? "Chat" : "Preview"}
+              </Button>
+            )}
+            {cardReady && (
+              <Button
+                size="sm"
+                className="bg-gray-900 hover:bg-gray-800 rounded-full text-xs"
+                onClick={handlePublish}
+                disabled={publishing}
+              >
+                {publishing ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                Publish
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Step: Prompt */}
-      {step === "prompt" && (
-        <div className="max-w-xl mx-auto px-4 pt-20 pb-12">
-          <div className="text-center mb-10">
-            <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="h-6 w-6 text-gray-500" />
+      {/* Content */}
+      <div className="flex-1 overflow-hidden">
+        {showPreview ? (
+          /* Preview Mode */
+          <div className="h-full overflow-y-auto bg-neutral-100 flex justify-center py-6">
+            <div className="w-full max-w-[380px]">
+              <div
+                className="rounded-2xl overflow-hidden shadow-xl"
+                style={{ backgroundColor: theme.colors.background }}
+              >
+                <InvitationCard wedding={mockWedding} theme={theme} />
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Describe your dream invitation
-            </h1>
-            <p className="text-gray-500 text-sm">
-              Tell AI what style, colors, and mood you want for your wedding card
-            </p>
           </div>
-
-          <div className="space-y-4">
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g., Elegant gold and cream Malay wedding with subtle floral patterns, romantic and luxurious feel with serif fonts..."
-              rows={4}
-              className="text-sm"
-            />
-
-            <Button
-              onClick={() => handleGenerateTheme(prompt)}
-              disabled={generating || !prompt.trim()}
-              className="w-full bg-gray-900 hover:bg-gray-800 rounded-full h-11"
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating your theme...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate with AI
-                </>
-              )}
-            </Button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-gray-50 px-3 text-gray-400">or pick a theme</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {builtInThemes.map((theme) => (
-                <button
-                  key={theme.id}
-                  onClick={() => {
-                    setSelectedTheme(theme);
-                    setStep("details");
-                  }}
-                  className="rounded-lg border border-gray-200 p-3 text-left hover:border-gray-400 transition-colors"
+        ) : (
+          /* Chat Mode */
+          <div className="h-full flex flex-col max-w-2xl mx-auto">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex gap-2.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
+                  {msg.role === "ai" && (
+                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="h-3.5 w-3.5 text-gray-500" />
+                    </div>
+                  )}
                   <div
-                    className="h-12 rounded-md mb-2"
-                    style={{ background: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.secondary})` }}
-                  />
-                  <p className="text-[10px] font-medium text-gray-700 truncate">{theme.name}</p>
-                </button>
+                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-gray-900 text-white rounded-br-md"
+                        : "bg-gray-100 text-gray-700 rounded-bl-md"
+                    }`}
+                  >
+                    {renderContent(msg.content)}
+                  </div>
+                  {msg.role === "user" && (
+                    <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="h-3.5 w-3.5 text-white" />
+                    </div>
+                  )}
+                </div>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Step: Details */}
-      {step === "details" && (
-        <div className="max-w-xl mx-auto px-4 pt-8 pb-12">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900">Wedding details</h2>
-            <p className="text-sm text-gray-500">Fill in the information for your invitation card</p>
-          </div>
-
-          <div className="space-y-4 bg-white rounded-2xl border border-gray-200 p-5">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Groom&apos;s Name *</Label>
-                <Input value={form.groomName} onChange={(e) => updateForm("groomName", e.target.value)} placeholder="Ahmad" className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs">Bride&apos;s Name *</Label>
-                <Input value={form.brideName} onChange={(e) => updateForm("brideName", e.target.value)} placeholder="Sarah" className="mt-1" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Groom&apos;s Family</Label>
-                <Input value={form.groomFamily} onChange={(e) => updateForm("groomFamily", e.target.value)} placeholder="Son of..." className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs">Bride&apos;s Family</Label>
-                <Input value={form.brideFamily} onChange={(e) => updateForm("brideFamily", e.target.value)} placeholder="Daughter of..." className="mt-1" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">Event Date & Time *</Label>
-              <Input type="datetime-local" value={form.eventDate} onChange={(e) => updateForm("eventDate", e.target.value)} className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs">Venue *</Label>
-              <Input value={form.venue} onChange={(e) => updateForm("venue", e.target.value)} placeholder="The Grand Ballroom" className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs">Venue Address</Label>
-              <Input value={form.venueAddress} onChange={(e) => updateForm("venueAddress", e.target.value)} placeholder="Full address" className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs">Personal Message</Label>
-              <Textarea value={form.customMessage} onChange={(e) => updateForm("customMessage", e.target.value)} placeholder="A message to your guests..." rows={2} className="mt-1" />
-            </div>
-          </div>
-
-          <Button
-            onClick={() => setStep("preview")}
-            disabled={!form.groomName || !form.brideName || !form.eventDate || !form.venue}
-            className="w-full mt-6 bg-gray-900 hover:bg-gray-800 rounded-full h-11"
-          >
-            Preview Card
-            <Eye className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      )}
-
-      {/* Step: Preview */}
-      {step === "preview" && (
-        <div className="pb-12">
-          {/* Phone frame preview */}
-          <div className="flex justify-center py-6">
-            <div
-              className="w-full max-w-[380px] rounded-3xl overflow-hidden shadow-2xl border border-gray-200"
-              style={{ backgroundColor: selectedTheme.colors.background }}
-            >
-              <InvitationCard wedding={mockWedding} theme={selectedTheme} />
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="max-w-sm mx-auto px-4 space-y-3">
-            <Button
-              onClick={handlePublish}
-              disabled={publishing}
-              className="w-full bg-gray-900 hover:bg-gray-800 rounded-full h-12 text-base"
-            >
-              {publishing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Publishing...
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Publish Invitation
-                </>
+              {isThinking && (
+                <div className="flex gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                    <Bot className="h-3.5 w-3.5 text-gray-500" />
+                  </div>
+                  <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
               )}
-            </Button>
 
-            <Button variant="outline" onClick={() => setStep("details")} className="w-full rounded-full">
-              Edit Details
-            </Button>
+              <div ref={chatEndRef} />
+            </div>
 
-            <p className="text-[11px] text-gray-400 text-center pt-2">
-              You&apos;ll need to create an account to publish. Your card design will be saved.
-            </p>
+            {/* Input */}
+            <div className="border-t border-gray-100 p-4 shrink-0">
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+                className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2"
+              >
+                <Sparkles className="h-4 w-4 text-gray-400 shrink-0" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={
+                    !wedding.groomName ? "Type the couple's names..." :
+                    !wedding.eventDate ? "Type the date..." :
+                    !wedding.venue ? "Type the venue..." :
+                    "Type a message..."
+                  }
+                  className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-gray-400"
+                  disabled={isThinking}
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isThinking}
+                  className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center hover:bg-gray-800 transition-colors disabled:opacity-30"
+                >
+                  <Send className="h-3.5 w-3.5 text-white" />
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
